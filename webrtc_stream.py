@@ -18,9 +18,110 @@ if sys.platform == "win32":
         pass
 
 from aiohttp import web
-from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
 from aiortc.contrib.media import MediaPlayer
 from av import VideoFrame
+import tempfile
+import os
+
+# 全局变量保持 track 的强引用，防止被 GC 回收
+_global_tracks = []
+
+
+# 备用方案：保持使用自定义 Track，但改进引用管理
+class CameraStreamTrack(MediaStreamTrack):
+    """自定义摄像头视频流 Track"""
+
+    kind = "video"
+
+    # 类级别的摄像头实例，所有 track 共享
+    _shared_cap = None
+    _cap_lock = asyncio.Lock()
+
+    def __init__(self, camera_index: int = 0, width: int = 640, height: int = 480):
+        super().__init__()
+        self.camera_index = camera_index
+        self.width = width
+        self.height = height
+        self.pts = 0  # 时间戳
+        # 注意：不在 __init__ 中打开摄像头
+
+    @classmethod
+    async def ensure_camera(cls, camera_index: int, width: int, height: int):
+        """确保摄像头已打开（类方法）"""
+        async with cls._cap_lock:
+            if cls._shared_cap is None or not cls._shared_cap.isOpened():
+                print("[WebRTC] 初始化共享摄像头...")
+                cls._shared_cap = cv2.VideoCapture(camera_index)
+
+                if not cls._shared_cap.isOpened():
+                    print(f"[WebRTC] 无法打开摄像头 (索引: {camera_index})")
+                    return False
+
+                # 设置摄像头参数
+                cls._shared_cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                cls._shared_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                cls._shared_cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 低延迟
+
+                actual_width = int(cls._shared_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                actual_height = int(cls._shared_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                print(f"[WebRTC] 摄像头初始化成功: {actual_width}x{actual_height}")
+        return True
+
+    async def recv(self):
+        """接收下一帧"""
+        try:
+            if self.pts == 0:
+                print("[WebRTC] ========== recv() 首次被调用 ==========")
+
+            # 确保摄像头已打开
+            await self.ensure_camera(self.camera_index, self.width, self.height)
+
+            if self._shared_cap is None or not self._shared_cap.isOpened():
+                raise RuntimeError("摄像头未初始化")
+
+            # 读取帧
+            ret, frame = self._shared_cap.read()
+            if not ret:
+                print("[WebRTC] 读取帧失败")
+                raise RuntimeError("无法读取摄像头帧")
+
+            # 转换颜色空间 BGR -> RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # 创建 VideoFrame
+            video_frame = VideoFrame.from_ndarray(frame, format="rgb24")
+            video_frame.pts = self.pts
+            video_frame.time_base = "1/90000"  # 90kHz 时钟
+
+            self.pts += 3000  # 33.33ms @ 90kHz (约30fps)
+
+            # 每30帧输出一次日志
+            if self.pts % 90000 == 0:  # 每秒一次
+                print(f"[WebRTC] 发送帧: {video_frame.pts}, pts={video_frame.pts}")
+
+            if self.pts == 3000:  # 第二帧
+                print("[WebRTC] ========== recv() 正常工作 ==========")
+
+            return video_frame
+        except Exception as e:
+            print(f"[WebRTC] recv() 异常: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    def stop(self):
+        """stop() 方法不再关闭摄像头，因为它是共享的"""
+        print("[WebRTC] stop() 被调用，但不关闭共享摄像头")
+        pass
+
+    @classmethod
+    def close_camera(cls):
+        """关闭共享摄像头（类方法）"""
+        if cls._shared_cap:
+            cls._shared_cap.release()
+            cls._shared_cap = None
+            print("[WebRTC] 共享摄像头已关闭")
 
 
 class WebRTCStreamServer:
@@ -31,92 +132,61 @@ class WebRTCStreamServer:
         self.width = width
         self.height = height
         self.pc = None
-        self.cap = None
-
-    async def camera_track_generator(self):
-        """生成器：从摄像头读取帧"""
-        print("[WebRTC] 初始化摄像头...")
-        self.cap = cv2.VideoCapture(self.camera_index)
-
-        if not self.cap.isOpened():
-            print(f"[WebRTC] 无法打开摄像头 (索引: {self.camera_index})")
-            return
-
-        # 设置摄像头参数
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 低延迟
-
-        actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print(f"[WebRTC] 摄像头初始化成功: {actual_width}x{actual_height}")
-
-        frame_time = 0
-        frame_count = 0
-        fps_target = 30
-        frame_duration = 1.0 / fps_target
-
-        try:
-            while True:
-                start_time = time.time()
-
-                # 读取帧
-                ret, frame = self.cap.read()
-                if not ret:
-                    print("[WebRTC] 读取帧失败，尝试重新打开摄像头...")
-                    self.cap.release()
-                    self.cap = cv2.VideoCapture(self.camera_index)
-                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                    continue
-
-                # 转换颜色空间 BGR -> RGB
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-                # 创建 VideoFrame
-                video_frame = VideoFrame.from_ndarray(frame, format="rgb24")
-                video_frame.pts = int(frame_time * 90000)  # 90kHz 时钟
-                video_frame.time_base = "1/90000"
-
-                yield video_frame
-
-                frame_time += frame_duration
-                frame_count += 1
-
-                # 每30帧输出一次
-                if frame_count % 30 == 0:
-                    elapsed = time.time() - start_time
-                    print(f"[WebRTC] 已发送 {frame_count} 帧")
-
-                # 控制帧率
-                elapsed = time.time() - start_time
-                sleep_time = frame_duration - elapsed
-                if sleep_time > 0:
-                    await asyncio.sleep(sleep_time)
-
-        except Exception as e:
-            print(f"[WebRTC] 摄像头错误: {e}")
-        finally:
-            if self.cap:
-                self.cap.release()
-                print("[WebRTC] 摄像头已关闭")
+        self.camera_track = None  # 将在 offer 中创建
 
     async def offer(self, request):
         """处理 WebRTC offer"""
+        print("[WebRTC] ========== offer() 被调用 ==========")
         params = await request.json()
+        print(f"[WebRTC] 收到 offer type: {params['type']}")
+        print(f"[WebRTC] offer SDP 长度: {len(params['sdp'])} 字符")
+        # 检查 SDP 中是否有视频描述
+        if 'm=video' in params['sdp']:
+            print("[WebRTC] ✓ SDP 包含视频描述")
+        else:
+            print("[WebRTC] ✗ SDP 不包含视频描述！")
+
         offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
 
         from aiortc import RTCPeerConnection
         self.pc = RTCPeerConnection()
-        self.pc.addTrack(self.camera_track_generator())
+
+        # 创建摄像头 track
+        if self.camera_track is None:
+            print("[WebRTC] 创建新的 CameraStreamTrack")
+            self.camera_track = CameraStreamTrack(
+                camera_index=self.camera_index,
+                width=self.width,
+                height=self.height
+            )
+            # 添加到全局列表以保持强引用（防止 GC）
+            _global_tracks.append(self.camera_track)
+        else:
+            print("[WebRTC] 复用已有的 CameraStreamTrack")
+
+        # 添加 track 到连接
+        print("[WebRTC] 添加 track 到 RTCPeerConnection")
+        self.pc.addTrack(self.camera_track)
+        # 也将 pc 添加到全局列表
+        _global_tracks.append(self.pc)
 
         # 设置远程描述
+        print("[WebRTC] 设置远程描述")
         await self.pc.setRemoteDescription(offer)
 
         # 创建 answer
+        print("[WebRTC] 创建 answer")
         answer = await self.pc.createAnswer()
         await self.pc.setLocalDescription(answer)
+
+        print("[WebRTC] ========== offer() 完成 ==========")
+
+        # 监听连接状态
+        @self.pc.on("connectionstatechange")
+        async def on_connectionstatechange():
+            print(f"[WebRTC] 连接状态变更: {self.pc.connectionState}")
+            if self.pc.connectionState == "connected":
+                print("[WebRTC] 连接已建立，应该开始传输数据")
 
         return web.Response(
             content_type="application/json",
@@ -312,6 +382,37 @@ class WebRTCStreamServer:
                 // 添加 transceiver
                 pc.addTransceiver('video', { direction: 'recvonly' });
 
+                // 监听 incoming track
+                pc.ontrack = (event) => {
+                    console.log('[WebRTC] 收到视频流');
+                    console.log('[WebRTC] track kind:', event.track.kind);
+                    console.log('[WebRTC] streams:', event.streams.length);
+                    console.log('[WebRTC] stream tracks:', event.streams[0]?.getTracks().length);
+
+                    if (event.track.kind === 'video') {
+                        video.srcObject = event.streams[0];
+
+                        // 检查视频元素
+                        video.addEventListener('loadedmetadata', () => {
+                            console.log('[WebRTC] 视频尺寸:', video.videoWidth, 'x', video.videoHeight);
+                        });
+
+                        video.addEventListener('playing', () => {
+                            console.log('[WebRTC] 视频开始播放');
+                        });
+
+                        video.play()
+                            .then(() => {
+                                console.log('[WebRTC] 视频播放成功');
+                                startTime = Date.now();
+                                updateStats();
+                            })
+                            .catch(err => {
+                                console.error('[WebRTC] 视频播放失败:', err);
+                            });
+                    }
+                };
+
                 // 监听 candidates
                 pc.onicecandidate = (event) => {
                     if (event.candidate === null) {
@@ -323,8 +424,12 @@ class WebRTCStreamServer:
                 pc.oniceconnectionstatechange = () => {
                     console.log('[WebRTC] ICE 状态:', pc.iceConnectionState);
                     if (pc.iceConnectionState === 'connected') {
-                        startTime = Date.now();
-                        updateStats();
+                        stats.textContent = '已连接';
+                        btnStart.disabled = true;
+                        btnStop.disabled = false;
+                    } else if (pc.iceConnectionState === 'failed') {
+                        stats.textContent = '连接失败';
+                        stop();
                     }
                 };
 
@@ -357,18 +462,7 @@ class WebRTCStreamServer:
                 const answer = await response.json();
                 await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-                video.srcObject = await pc.recv();
-                await video.play();
-
-                stats.textContent = '已连接';
-                btnStart.disabled = true;
-                btnStop.disabled = false;
-
-                // 监控视频统计
-                video.addEventListener('play', () => {
-                    startTime = Date.now();
-                    updateStats();
-                });
+                stats.textContent = '等待视频流...';
 
             } catch (error) {
                 console.error('[WebRTC] 错误:', error);
@@ -428,8 +522,18 @@ class WebRTCStreamServer:
     async def on_shutdown(self, app):
         """关闭时清理资源"""
         print("[WebRTC] 正在关闭服务器...")
-        if self.cap:
-            self.cap.release()
+        # 关闭共享摄像头
+        CameraStreamTrack.close_camera()
+
+        # 清理全局引用
+        global _global_tracks
+        for item in _global_tracks:
+            if hasattr(item, 'close'):
+                await item.close()
+        _global_tracks.clear()
+
+        if self.pc:
+            await self.pc.close()
 
 
 async def main():

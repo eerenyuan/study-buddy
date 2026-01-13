@@ -47,6 +47,14 @@ monitor_state = {
 debug_camera = None
 debug_camera_lock = threading.Lock()
 
+# 定时任务调度器状态
+scheduler_state = {
+    "running": False,
+    "thread": None,
+    "stop_event": threading.Event(),
+    "last_check": None
+}
+
 # 默认配置
 default_config = {
     "rules": {
@@ -61,6 +69,11 @@ default_config = {
         "capture": 30,      # 截图间隔（秒）
         "notify": 300,      # 图片发送间隔（秒）
         "stop": 3600        # 停止间隔（秒）
+    },
+    "schedule": {
+        "enabled": False,   # 是否启用定时功能
+        "start_time": "08:00",  # 开始时间（HH:MM 格式）
+        "end_time": "18:00"     # 结束时间（HH:MM 格式）
     }
 }
 
@@ -231,6 +244,87 @@ def monitor_loop():
         vision_module["camera"].shutdown()
         vision_module["analyzer"].shutdown()
         print("[监控] 监控线程停止")
+
+
+def scheduler_loop():
+    """定时任务调度器循环"""
+    print("[调度器] 定时任务调度器启动")
+
+    # 记录今天是否已经启动过
+    last_started_date = None
+
+    while not scheduler_state["stop_event"].is_set():
+        try:
+            # 读取配置
+            schedule_config = monitor_config.get("schedule", {})
+            enabled = schedule_config.get("enabled", False)
+
+            if enabled:
+                # 获取当前时间和配置的时间
+                now = datetime.now()
+                current_date = now.date()
+                current_time = now.strftime("%H:%M")
+                start_time = schedule_config.get("start_time", "08:00")
+                end_time = schedule_config.get("end_time", "18:00")
+
+                # 检查是否应该启动监控（只在第一次到达时间时启动）
+                if current_time >= start_time and current_time < end_time and not monitor_state["running"]:
+                    # 检查今天是否已经启动过
+                    if last_started_date != current_date:
+                        print(f"[调度器] 到达开始时间 {start_time}，自动启动监控")
+                        monitor_state["stop_event"].clear()
+                        monitor_state["running"] = True
+                        monitor_state["thread"] = threading.Thread(target=monitor_loop, daemon=True)
+                        monitor_state["thread"].start()
+                        last_started_date = current_date
+                        print(f"[调度器] 监控已启动，当前时间: {current_time}")
+
+                # 检查是否应该停止监控
+                elif current_time >= end_time and monitor_state["running"]:
+                    print(f"[调度器] 到达结束时间 {end_time}，自动停止监控")
+                    monitor_state["stop_event"].set()
+                    monitor_state["running"] = False
+                    last_started_date = None  # 重置，允许明天再次启动
+
+            scheduler_state["last_check"] = datetime.now().isoformat()
+
+            # 等待60秒再检查
+            for _ in range(60):
+                if scheduler_state["stop_event"].is_set():
+                    break
+                time.sleep(1)
+
+        except Exception as e:
+            print(f"[调度器] 错误: {e}")
+            import traceback
+            traceback.print_exc()
+            time.sleep(60)  # 出错后等待60秒再重试
+
+    print("[调度器] 定时任务调度器停止")
+
+
+def start_scheduler():
+    """启动定时任务调度器"""
+    if scheduler_state["running"]:
+        return False
+
+    scheduler_state["stop_event"].clear()
+    scheduler_state["running"] = True
+    scheduler_state["thread"] = threading.Thread(target=scheduler_loop, daemon=True)
+    scheduler_state["thread"].start()
+    print("[调度器] 定时任务调度器已启动")
+    return True
+
+
+def stop_scheduler():
+    """停止定时任务调度器"""
+    if not scheduler_state["running"]:
+        return False
+
+    scheduler_state["stop_event"].set()
+    scheduler_state["running"] = False
+    print("[调度器] 定时任务调度器已停止")
+    return True
 
 
 # 调试页面 HTML 模板
@@ -786,7 +880,39 @@ HTML_TEMPLATE = """
                         <input type="number" name="stop" value="3600" min="60">
                     </div>
                 </div>
-                <button type="button" class="btn btn-start" onclick="saveConfig()">保存配置</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>⏰ 定时任务配置</h2>
+            <form id="schedule-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" name="enabled" id="schedule-enabled">
+                            <span>启用定时任务</span>
+                        </label>
+                        <small style="color: #666; display: block; margin-top: 5px;">
+                            启用后，系统会在每天指定时间自动启动和停止监控
+                        </small>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>开始时间</label>
+                        <input type="time" name="start_time" value="08:00">
+                        <small style="color: #666;">每天自动启动监控的时间</small>
+                    </div>
+                    <div class="form-group">
+                        <label>结束时间</label>
+                        <input type="time" name="end_time" value="18:00">
+                        <small style="color: #666;">每天自动停止监控的时间</small>
+                    </div>
+                </div>
+                <div id="schedule-status" style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin-top: 10px;">
+                    <strong>下次执行：</strong>
+                    <span id="next-schedule">未启用</span>
+                </div>
             </form>
         </div>
 
@@ -796,14 +922,79 @@ HTML_TEMPLATE = """
                 <div class="loading">加载中...</div>
             </div>
         </div>
+
+        <!-- 统一的保存按钮区域 -->
+        <div style="position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); text-align: center;">
+            <button id="save-config-btn" type="button" class="btn btn-start" onclick="saveConfig()" disabled style="padding: 15px 40px; font-size: 16px;">
+                💾 保存配置
+            </button>
+            <span id="save-status" style="margin-left: 15px; color: #666;"></span>
+        </div>
     </div>
 
+    <style>
+        /* 为底部固定按钮留出空间 */
+        body { padding-bottom: 80px; }
+    </style>
+
     <script>
+        // 存储原始配置，用于检测变更
+        let originalConfig = null;
+
+        // 检查配置是否有变更
+        function checkConfigChanged() {
+            if (!originalConfig) return false;
+
+            const currentRules = {};
+            document.querySelectorAll('#config-form input').forEach(input => {
+                currentRules[input.name] = input.value;
+            });
+
+            const currentIntervals = {};
+            document.querySelectorAll('#intervals-form input').forEach(input => {
+                currentIntervals[input.name] = parseInt(input.value);
+            });
+
+            const currentSchedule = {
+                enabled: document.getElementById('schedule-enabled').checked,
+                start_time: document.querySelector('input[name="start_time"]').value,
+                end_time: document.querySelector('input[name="end_time"]').value
+            };
+
+            // 比较配置
+            const rulesChanged = JSON.stringify(currentRules) !== JSON.stringify(originalConfig.rules);
+            const intervalsChanged = JSON.stringify(currentIntervals) !== JSON.stringify(originalConfig.intervals);
+            const scheduleChanged = JSON.stringify(currentSchedule) !== JSON.stringify(originalConfig.schedule || { enabled: false });
+
+            return rulesChanged || intervalsChanged || scheduleChanged;
+        }
+
+        // 更新保存按钮状态
+        function updateSaveButton() {
+            const btn = document.getElementById('save-config-btn');
+            const status = document.getElementById('save-status');
+
+            if (checkConfigChanged()) {
+                btn.disabled = false;
+                btn.textContent = '💾 保存配置';
+                status.textContent = '⚠️ 配置已修改，请保存';
+                status.style.color = '#f39c12';
+            } else {
+                btn.disabled = true;
+                btn.textContent = '💾 保存配置';
+                status.textContent = '✓ 配置已是最新';
+                status.style.color = '#27ae60';
+            }
+        }
+
         // 加载配置
         async function loadConfig() {
             try {
                 const res = await fetch('/api/config');
                 const config = await res.json();
+
+                // 保存原始配置
+                originalConfig = JSON.parse(JSON.stringify(config));
 
                 // 填充规则表单
                 document.querySelectorAll('#config-form input').forEach(input => {
@@ -818,6 +1009,21 @@ HTML_TEMPLATE = """
                         input.value = config.intervals[input.name];
                     }
                 });
+
+                // 填充定时任务表单
+                if (config.schedule) {
+                    document.getElementById('schedule-enabled').checked = config.schedule.enabled || false;
+                    if (config.schedule.start_time) {
+                        document.querySelector('input[name="start_time"]').value = config.schedule.start_time;
+                    }
+                    if (config.schedule.end_time) {
+                        document.querySelector('input[name="end_time"]').value = config.schedule.end_time;
+                    }
+                    updateNextSchedule();
+                }
+
+                // 更新保存按钮状态
+                updateSaveButton();
 
             } catch (e) {
                 console.error('加载配置失败:', e);
@@ -933,16 +1139,42 @@ HTML_TEMPLATE = """
                     intervals[input.name] = parseInt(input.value);
                 });
 
+                // 收集定时任务配置
+                const schedule = {
+                    enabled: document.getElementById('schedule-enabled').checked,
+                    start_time: document.querySelector('input[name="start_time"]').value,
+                    end_time: document.querySelector('input[name="end_time"]').value
+                };
+
                 const res = await fetch('/api/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rules, intervals })
+                    body: JSON.stringify({ rules, intervals, schedule })
                 });
 
                 const data = await res.json();
 
                 if (data.success) {
-                    alert('配置已保存');
+                    // 更新原始配置
+                    originalConfig = {
+                        rules: rules,
+                        intervals: intervals,
+                        schedule: schedule
+                    };
+
+                    // 更新按钮状态
+                    const btn = document.getElementById('save-config-btn');
+                    const status = document.getElementById('save-status');
+                    btn.disabled = true;
+                    status.textContent = '✓ 配置已保存';
+                    status.style.color = '#27ae60';
+
+                    // 3秒后隐藏状态
+                    setTimeout(() => {
+                        status.textContent = '✓ 配置已是最新';
+                    }, 3000);
+
+                    updateNextSchedule();
                 } else {
                     alert('保存失败: ' + (data.error || '未知错误'));
                 }
@@ -950,6 +1182,81 @@ HTML_TEMPLATE = """
                 alert('请求失败: ' + e.message);
             }
         }
+
+        // 更新下次执行时间显示
+        function updateNextSchedule() {
+            const enabled = document.getElementById('schedule-enabled').checked;
+            const nextScheduleEl = document.getElementById('next-schedule');
+
+            if (!enabled) {
+                nextScheduleEl.textContent = '未启用';
+                return;
+            }
+
+            const startTime = document.querySelector('input[name="start_time"]').value;
+            const endTime = document.querySelector('input[name="end_time"]').value;
+
+            // 计算下次启动和停止时间
+            const now = new Date();
+            const todayStart = new Date(now);
+            const [startHour, startMin] = startTime.split(':');
+            todayStart.setHours(parseInt(startHour), parseInt(startMin), 0, 0);
+
+            const todayEnd = new Date(now);
+            const [endHour, endMin] = endTime.split(':');
+            todayEnd.setHours(parseInt(endHour), parseInt(endMin), 0, 0);
+
+            let nextStart, nextEnd;
+
+            if (now < todayStart) {
+                // 今天还没到开始时间
+                nextStart = todayStart;
+                nextEnd = todayEnd;
+            } else if (now < todayEnd) {
+                // 今天在监控时间段内
+                nextStart = todayStart;
+                nextEnd = todayEnd;
+            } else {
+                // 今天已经过了结束时间，下次是明天
+                nextStart = new Date(todayStart);
+                nextStart.setDate(nextStart.getDate() + 1);
+                nextEnd = new Date(todayEnd);
+                nextEnd.setDate(nextEnd.getDate() + 1);
+            }
+
+            const formatTime = (d) => {
+                return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            };
+
+            nextScheduleEl.textContent = `启动: ${formatTime(nextStart)} | 停止: ${formatTime(nextEnd)}`;
+        }
+
+        // 监听所有配置输入变化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 监听规则表单输入
+            document.querySelectorAll('#config-form input').forEach(input => {
+                input.addEventListener('input', updateSaveButton);
+            });
+
+            // 监听间隔表单输入
+            document.querySelectorAll('#intervals-form input').forEach(input => {
+                input.addEventListener('input', updateSaveButton);
+            });
+
+            // 监听定时任务配置
+            document.getElementById('schedule-enabled').addEventListener('change', () => {
+                updateNextSchedule();
+                updateSaveButton();
+            });
+            document.querySelector('input[name="start_time"]').addEventListener('change', () => {
+                updateNextSchedule();
+                updateSaveButton();
+            });
+            document.querySelector('input[name="end_time"]').addEventListener('change', () => {
+                updateNextSchedule();
+                updateSaveButton();
+            });
+        });
 
         // 初始加载
         loadConfig();  // 先加载配置
@@ -1018,6 +1325,22 @@ def handle_config():
             data = request.json
             monitor_config["rules"].update(data.get("rules", {}))
             monitor_config["intervals"].update(data.get("intervals", {}))
+
+            # 处理定时任务配置
+            if "schedule" in data:
+                old_enabled = monitor_config.get("schedule", {}).get("enabled", False)
+                monitor_config["schedule"] = data["schedule"]
+                new_enabled = data["schedule"].get("enabled", False)
+
+                # 如果定时任务配置发生变化，重启调度器
+                if old_enabled != new_enabled:
+                    if new_enabled:
+                        start_scheduler()
+                        print("[配置] 定时任务已启用")
+                    else:
+                        stop_scheduler()
+                        print("[配置] 定时任务已禁用")
+
             save_config()
             return jsonify({"success": True})
         except Exception as e:
@@ -1171,4 +1494,9 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"访问地址: http://localhost:5000")
     print("=" * 60)
+
+    # 启动定时任务调度器
+    if monitor_config.get("schedule", {}).get("enabled", False):
+        start_scheduler()
+
     app.run(host='0.0.0.0', port=5000, debug=True)
