@@ -24,11 +24,29 @@ class Camera(BaseModule):
         """初始化摄像头"""
         try:
             import cv2
+
+            # 尝试使用配置的索引
             self.cap = cv2.VideoCapture(self.config.camera.camera_index)
 
             if not self.cap.isOpened():
                 self.logger.log("camera", "error", f"无法打开摄像头 (索引: {self.config.camera.camera_index})")
-                return False
+                self.logger.log("camera", "warning", "尝试自动检测可用摄像头...")
+
+                # 自动检测可用摄像头（尝试索引0-5）
+                for idx in range(6):
+                    test_cap = cv2.VideoCapture(idx)
+                    if test_cap.isOpened():
+                        test_cap.release()
+                        self.logger.log("camera", "info", f"检测到可用摄像头: 索引 {idx}")
+                        self.cap = cv2.VideoCapture(idx)
+                        if self.cap.isOpened():
+                            self.config.camera.camera_index = idx  # 更新配置
+                            break
+
+                # 再次检查
+                if not self.cap.isOpened():
+                    self.logger.log("camera", "error", "未找到可用的摄像头")
+                    return False
 
             # 设置分辨率
             width, height = self.config.camera.resolution
