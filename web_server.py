@@ -239,6 +239,7 @@ def monitor_loop():
             monitor_state["stop_event"].wait(monitor_config["intervals"]["capture"])
 
     finally:
+        monitor_state["running"] = False  # 确保状态被正确更新
         scheduler.shutdown()
         im_module.shutdown()
         vision_module["camera"].shutdown()
@@ -278,6 +279,14 @@ def scheduler_loop():
                         monitor_state["thread"].start()
                         last_started_date = current_date
                         print(f"[调度器] 监控已启动，当前时间: {current_time}")
+
+                # 检查线程是否意外退出（比如初始化失败）
+                if monitor_state["running"] and monitor_state["thread"]:
+                    if not monitor_state["thread"].is_alive():
+                        print(f"[调度器] 警告：监控线程意外退出，重置状态")
+                        monitor_state["running"] = False
+                        monitor_state["thread"] = None
+                        last_started_date = None  # 允许重新启动
 
                 # 检查是否应该停止监控
                 elif current_time >= end_time and monitor_state["running"]:
