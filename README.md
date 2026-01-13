@@ -189,7 +189,7 @@ Kimi Vision API 自动分析以下维度：
 支持同时向多个企业微信用户发送通知：
 
 ```env
-WECHAT_TOUSER=RenYuan|xiaoyu
+WECHAT_TOUSER=user1|user2|user3
 ```
 
 用 `|` 分隔多个用户名。
