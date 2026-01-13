@@ -1014,6 +1014,7 @@ HTML_TEMPLATE = """
     <script>
         // 存储原始配置，用于检测变更
         let originalConfig = null;
+        let configLoaded = false;  // 标记配置是否已加载完成
 
         // 前端默认配置（用于检测新增字段是否被修改）
         const frontendDefaults = {
@@ -1027,7 +1028,7 @@ HTML_TEMPLATE = """
 
         // 检查配置是否有变更
         function checkConfigChanged() {
-            if (!originalConfig) return false;
+            if (!originalConfig || !configLoaded) return false;  // 配置未加载完成，不算变更
 
             const currentRules = {};
             document.querySelectorAll('#config-form input').forEach(input => {
@@ -1079,7 +1080,7 @@ HTML_TEMPLATE = """
             const status = document.getElementById('save-status');
 
             // 如果原始配置还未加载，禁用按钮
-            if (!originalConfig) {
+            if (!originalConfig || !configLoaded) {
                 btn.disabled = true;
                 status.textContent = '正在加载配置...';
                 status.style.color = '#999';
@@ -1108,6 +1109,7 @@ HTML_TEMPLATE = """
                 // 保存原始配置
                 originalConfig = JSON.parse(JSON.stringify(config));
 
+                // 填充表单（此时configLoaded=false，所以不会误判为变更）
                 // 填充规则表单
                 document.querySelectorAll('#config-form input').forEach(input => {
                     if (config.rules && config.rules[input.name]) {
@@ -1134,7 +1136,8 @@ HTML_TEMPLATE = """
                     updateNextSchedule();
                 }
 
-                // 更新保存按钮状态
+                // 配置加载完成，允许检测变更
+                configLoaded = true;
                 updateSaveButton();
 
                 // 隐藏加载遮罩
