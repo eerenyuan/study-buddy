@@ -1,0 +1,62 @@
+# 环境变量和敏感配置
+.env
+.env.local
+.env.*.local
+
+# 日志文件
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 数据文件（包含捕获的图片）
+data/captures/
+data/*.jpg
+data/*.png
+data/*.json
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# 配置文件（包含敏感信息）
+data/monitor_config.json
+
+# 测试输出
+test_output/

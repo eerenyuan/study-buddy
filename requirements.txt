@@ -1,0 +1,12 @@
+# 学习监工系统 - Python 依赖
+
+# 核心依赖
+httpx>=0.24.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+
+# 摄像头支持
+opencv-python>=4.8.0
+
+# 可选：Telegram 支持（如果需要）
+# telethon>=0.27.0
