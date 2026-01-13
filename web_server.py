@@ -231,9 +231,21 @@ def monitor_loop():
                 print(f"[监控] {timestamp.strftime('%H:%M:%S')} - {'✓ 合格' if is_correct else '✗ 不合格'} - {failed_items if not is_correct else ''}")
 
             except Exception as e:
-                print(f"[监控] 处理失败: {e}")
-                import traceback
-                traceback.print_exc()
+                error_msg = str(e)
+                print(f"[监控] 处理失败: {error_msg}")
+
+                # 如果是摄像头读取失败，尝试重新初始化
+                if "摄像头" in error_msg or "无法从摄像头读取" in error_msg:
+                    print("[监控] 检测到摄像头错误，尝试重新初始化...")
+                    if vision_module["camera"].reinitialize():
+                        print("[监控] 摄像头重新初始化成功")
+                    else:
+                        print("[监控] 摄像头重新初始化失败，将在下次尝试")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    import traceback
+                    traceback.print_exc()
 
             # 等待下一次捕获
             monitor_state["stop_event"].wait(monitor_config["intervals"]["capture"])

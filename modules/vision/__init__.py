@@ -62,6 +62,13 @@ class Camera(BaseModule):
             self.cap = None
         self.logger.log("camera", "info", "摄像头已关闭")
 
+    def reinitialize(self) -> bool:
+        """重新初始化摄像头（用于恢复连接）"""
+        self.logger.log("camera", "warning", "尝试重新初始化摄像头...")
+        self.shutdown()
+        time.sleep(1)  # 等待1秒让资源释放
+        return self.initialize()
+
     def capture(self, output_path: str = None) -> str:
         """捕获图像
 
