@@ -69,7 +69,8 @@ default_config = {
     "intervals": {
         "capture": 30,      # 截图间隔（秒）
         "notify": 300,      # 图片发送间隔（秒）
-        "stop": 3600        # 停止间隔（秒）
+        "stop": 3600,       # 停止间隔（秒）
+        "min_notify_interval": 60  # 最小通知间隔（秒），避免刷屏
     },
     "schedule": {
         "enabled": False,   # 是否启用定时功能
@@ -191,24 +192,25 @@ def monitor_loop():
                 should_notify = False
                 notify_reason = ""
 
+                # 检查最小通知间隔（无论合格与否都需要遵守）
+                min_notify_interval = monitor_config["intervals"].get("min_notify_interval", 60)
+                can_notify = True
+
+                if monitor_state["last_notify_time"]:
+                    last_notify = datetime.fromisoformat(monitor_state["last_notify_time"])
+                    if (timestamp - last_notify).total_seconds() < min_notify_interval:
+                        can_notify = False
+
                 if not is_correct:
-                    # 不合格，立即通知（但需要检查距离上次通知是否超过最小间隔）
-                    min_notify_interval = 60  # 最小通知间隔60秒，避免刷屏
-                    can_notify = True
-
-                    if monitor_state["last_notify_time"]:
-                        last_notify = datetime.fromisoformat(monitor_state["last_notify_time"])
-                        if (timestamp - last_notify).total_seconds() < min_notify_interval:
-                            can_notify = False
-
+                    # 不合格，立即通知（但需要遵守最小间隔）
                     if can_notify:
                         should_notify = True
                         notify_reason = f"检查不合格: {', '.join(failed_items)}"
                 else:
                     monitor_state["last_correct_time"] = timestamp.isoformat()
 
-                    # 只有在合格的情况下才检查定期通知
-                    if monitor_state["last_notify_time"]:
+                    # 合格的情况下，检查是否需要定期状态更新
+                    if can_notify and monitor_state["last_notify_time"]:
                         last_notify = datetime.fromisoformat(monitor_state["last_notify_time"])
                         if (timestamp - last_notify).total_seconds() >= monitor_config["intervals"]["notify"]:
                             should_notify = True
@@ -1013,6 +1015,16 @@ HTML_TEMPLATE = """
         // 存储原始配置，用于检测变更
         let originalConfig = null;
 
+        // 前端默认配置（用于检测新增字段是否被修改）
+        const frontendDefaults = {
+            intervals: {
+                capture: 30,
+                notify: 300,
+                stop: 3600,
+                min_notify_interval: 60
+            }
+        };
+
         // 检查配置是否有变更
         function checkConfigChanged() {
             if (!originalConfig) return false;
@@ -1033,9 +1045,29 @@ HTML_TEMPLATE = """
                 end_time: document.querySelector('input[name="end_time"]').value
             };
 
-            // 比较配置
+            // 比较规则
             const rulesChanged = JSON.stringify(currentRules) !== JSON.stringify(originalConfig.rules);
-            const intervalsChanged = JSON.stringify(currentIntervals) !== JSON.stringify(originalConfig.intervals);
+
+            // 比较间隔（只比较originalConfig中存在的字段）
+            let intervalsChanged = false;
+            const originalIntervals = originalConfig.intervals || {};
+            for (const key in originalIntervals) {
+                if (currentIntervals[key] !== originalIntervals[key]) {
+                    intervalsChanged = true;
+                    break;
+                }
+            }
+            // 检查是否有新增字段被修改
+            for (const key in currentIntervals) {
+                if (key in originalIntervals) continue; // 已在上面检查过
+                // 新增字段，如果值和默认值不同，认为已修改
+                if (currentIntervals[key] !== frontendDefaults.intervals[key]) {
+                    intervalsChanged = true;
+                    break;
+                }
+            }
+
+            // 比较定时任务
             const scheduleChanged = JSON.stringify(currentSchedule) !== JSON.stringify(originalConfig.schedule || { enabled: false });
 
             return rulesChanged || intervalsChanged || scheduleChanged;
@@ -1045,6 +1077,14 @@ HTML_TEMPLATE = """
         function updateSaveButton() {
             const btn = document.getElementById('save-config-btn');
             const status = document.getElementById('save-status');
+
+            // 如果原始配置还未加载，禁用按钮
+            if (!originalConfig) {
+                btn.disabled = true;
+                status.textContent = '正在加载配置...';
+                status.style.color = '#999';
+                return;
+            }
 
             if (checkConfigChanged()) {
                 btn.disabled = false;
@@ -1606,9 +1646,9 @@ if __name__ == '__main__':
     if monitor_config.get("schedule", {}).get("enabled", False):
         start_scheduler()
 
-    # 启动调试摄像头清理线程
-    cleanup_thread = threading.Thread(target=cleanup_debug_camera, daemon=True)
-    cleanup_thread.start()
-    print("[系统] 调试摄像头清理线程已启动")
+    # 启动调试摄像头清理线程（暂时禁用，测试是否导致启动错误）
+    # cleanup_thread = threading.Thread(target=cleanup_debug_camera, daemon=True)
+    # cleanup_thread.start()
+    # print("[系统] 调试摄像头清理线程已启动")
 
     app.run(host='0.0.0.0', port=5000, debug=True)
