@@ -1016,16 +1016,6 @@ HTML_TEMPLATE = """
         let originalConfig = null;
         let configLoaded = false;  // 标记配置是否已加载完成
 
-        // 前端默认配置（用于检测新增字段是否被修改）
-        const frontendDefaults = {
-            intervals: {
-                capture: 30,
-                notify: 300,
-                stop: 3600,
-                min_notify_interval: 60
-            }
-        };
-
         // 检查配置是否有变更
         function checkConfigChanged() {
             if (!originalConfig || !configLoaded) return false;  // 配置未加载完成，不算变更
@@ -1054,28 +1044,12 @@ HTML_TEMPLATE = """
                     break;
                 }
             }
-            // 检查是否有新增字段
-            for (const key in currentRules) {
-                if (!(key in originalConfig.rules)) {
-                    rulesChanged = true;
-                    break;
-                }
-            }
 
             // 比较间隔（逐字段比较）
             let intervalsChanged = false;
             const originalIntervals = originalConfig.intervals || {};
             for (const key in originalIntervals) {
                 if (currentIntervals[key] !== originalIntervals[key]) {
-                    intervalsChanged = true;
-                    break;
-                }
-            }
-            // 检查是否有新增字段被修改
-            for (const key in currentIntervals) {
-                if (key in originalIntervals) continue; // 已在上面检查过
-                // 新增字段，如果值和默认值不同，认为已修改
-                if (currentIntervals[key] !== frontendDefaults.intervals[key]) {
                     intervalsChanged = true;
                     break;
                 }
