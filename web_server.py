@@ -1184,6 +1184,9 @@ HTML_TEMPLATE = """
                     }, 3000);
 
                     updateNextSchedule();
+
+                    // 刷新状态（因为保存配置可能会触发自动启动/停止监控）
+                    await getStatus();
                 } else {
                     alert('保存失败: ' + (data.error || '未知错误'));
                 }
