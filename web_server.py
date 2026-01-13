@@ -1046,10 +1046,23 @@ HTML_TEMPLATE = """
                 end_time: document.querySelector('input[name="end_time"]').value
             };
 
-            // 比较规则
-            const rulesChanged = JSON.stringify(currentRules) !== JSON.stringify(originalConfig.rules);
+            // 比较规则（逐字段比较，避免JSON.stringify的key顺序问题）
+            let rulesChanged = false;
+            for (const key in originalConfig.rules) {
+                if (currentRules[key] !== originalConfig.rules[key]) {
+                    rulesChanged = true;
+                    break;
+                }
+            }
+            // 检查是否有新增字段
+            for (const key in currentRules) {
+                if (!(key in originalConfig.rules)) {
+                    rulesChanged = true;
+                    break;
+                }
+            }
 
-            // 比较间隔（只比较originalConfig中存在的字段）
+            // 比较间隔（逐字段比较）
             let intervalsChanged = false;
             const originalIntervals = originalConfig.intervals || {};
             for (const key in originalIntervals) {
@@ -1068,8 +1081,12 @@ HTML_TEMPLATE = """
                 }
             }
 
-            // 比较定时任务
-            const scheduleChanged = JSON.stringify(currentSchedule) !== JSON.stringify(originalConfig.schedule || { enabled: false });
+            // 比较定时任务（逐字段比较）
+            let scheduleChanged = false;
+            const originalSchedule = originalConfig.schedule || { enabled: false };
+            if (currentSchedule.enabled !== originalSchedule.enabled) scheduleChanged = true;
+            else if (currentSchedule.start_time !== (originalSchedule.start_time || "08:00")) scheduleChanged = true;
+            else if (currentSchedule.end_time !== (originalSchedule.end_time || "18:00")) scheduleChanged = true;
 
             return rulesChanged || intervalsChanged || scheduleChanged;
         }
