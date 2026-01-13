@@ -192,18 +192,27 @@ def monitor_loop():
                 notify_reason = ""
 
                 if not is_correct:
-                    # 不合格，立即通知
-                    should_notify = True
-                    notify_reason = f"检查不合格: {', '.join(failed_items)}"
+                    # 不合格，立即通知（但需要检查距离上次通知是否超过最小间隔）
+                    min_notify_interval = 60  # 最小通知间隔60秒，避免刷屏
+                    can_notify = True
+
+                    if monitor_state["last_notify_time"]:
+                        last_notify = datetime.fromisoformat(monitor_state["last_notify_time"])
+                        if (timestamp - last_notify).total_seconds() < min_notify_interval:
+                            can_notify = False
+
+                    if can_notify:
+                        should_notify = True
+                        notify_reason = f"检查不合格: {', '.join(failed_items)}"
                 else:
                     monitor_state["last_correct_time"] = timestamp.isoformat()
 
-                # 检查发送间隔
-                if monitor_state["last_notify_time"]:
-                    last_notify = datetime.fromisoformat(monitor_state["last_notify_time"])
-                    if (timestamp - last_notify).total_seconds() >= monitor_config["intervals"]["notify"]:
-                        should_notify = True
-                        notify_reason = "定期状态更新"
+                    # 只有在合格的情况下才检查定期通知
+                    if monitor_state["last_notify_time"]:
+                        last_notify = datetime.fromisoformat(monitor_state["last_notify_time"])
+                        if (timestamp - last_notify).total_seconds() >= monitor_config["intervals"]["notify"]:
+                            should_notify = True
+                            notify_reason = "定期状态更新"
 
                 # 检查停止间隔
                 if monitor_state["last_correct_time"]:
@@ -488,6 +497,41 @@ DEBUG_HTML_TEMPLATE = """
             font-weight: 600;
         }
         .back-link:hover { text-decoration: underline; }
+
+        /* 加载遮罩 */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+        #loading-overlay.hidden {
+            display: none;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            margin-top: 20px;
+            color: #667eea;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -832,6 +876,12 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
+    <!-- 加载遮罩 -->
+    <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在加载配置...</div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>🎓 StudyBuddy学习伙伴 <a href="/debug" style="font-size: 16px; margin-left: 20px; color: white; text-decoration: none; opacity: 0.8;">🎥 摄像头调试</a></h1>
@@ -1047,8 +1097,13 @@ HTML_TEMPLATE = """
                 // 更新保存按钮状态
                 updateSaveButton();
 
+                // 隐藏加载遮罩
+                document.getElementById('loading-overlay').classList.add('hidden');
+
             } catch (e) {
                 console.error('加载配置失败:', e);
+                // 即使失败也隐藏遮罩
+                document.getElementById('loading-overlay').classList.add('hidden');
             }
         }
 
