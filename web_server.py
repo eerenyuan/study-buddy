@@ -46,6 +46,7 @@ monitor_state = {
 # 调试摄像头实例（用于视频流）
 debug_camera = None
 debug_camera_lock = threading.Lock()
+debug_camera_last_used = None  # 最后一次使用时间
 
 # 定时任务调度器状态
 scheduler_state = {
@@ -1392,7 +1393,7 @@ def video_feed():
     """视频流接口"""
     print("[视频流] 客户端连接")
     def generate():
-        global debug_camera
+        global debug_camera, debug_camera_last_used
 
         with debug_camera_lock:
             if debug_camera is None:
@@ -1403,6 +1404,9 @@ def video_feed():
                     yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + create_error_image() + b'\r\n'
                     return
                 print("[视频流] 摄像头初始化成功")
+
+            # 更新最后使用时间
+            debug_camera_last_used = time.time()
 
         if debug_camera is None or debug_camera.cap is None:
             # 摄像头初始化失败
@@ -1423,6 +1427,9 @@ def video_feed():
                     if debug_camera is None or debug_camera.cap is None or not debug_camera.cap.isOpened():
                         print("[视频流] 摄像头未打开或已关闭")
                         break
+
+                    # 更新最后使用时间
+                    debug_camera_last_used = time.time()
 
                     # 清空缓冲区，读取最新帧（减少延迟）
                     debug_camera.cap.read()
@@ -1460,7 +1467,9 @@ def video_feed():
             import traceback
             traceback.print_exc()
         finally:
-            pass  # 保持摄像头打开以便快速重连
+            # 客户端断开后，不立即释放摄像头，但记录时间
+            # 后台任务会检查并在超时后释放
+            print("[视频流] 推流结束，摄像头将在5分钟后自动释放")
 
     return Response(stream_with_context(generate()),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -1512,6 +1521,25 @@ def create_error_image():
     return buffer.getvalue()
 
 
+def cleanup_debug_camera():
+    """后台任务：定期清理超时未使用的调试摄像头"""
+    global debug_camera, debug_camera_last_used
+
+    timeout = 300  # 5分钟超时
+
+    while True:
+        time.sleep(60)  # 每分钟检查一次
+
+        with debug_camera_lock:
+            if debug_camera is not None and debug_camera_last_used is not None:
+                idle_time = time.time() - debug_camera_last_used
+                if idle_time > timeout:
+                    print(f"[清理] 调试摄像头已空闲{int(idle_time)}秒，自动释放")
+                    debug_camera.shutdown()
+                    debug_camera = None
+                    debug_camera_last_used = None
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("学习监工 Web 管理界面")
@@ -1522,5 +1550,10 @@ if __name__ == '__main__':
     # 启动定时任务调度器
     if monitor_config.get("schedule", {}).get("enabled", False):
         start_scheduler()
+
+    # 启动调试摄像头清理线程
+    cleanup_thread = threading.Thread(target=cleanup_debug_camera, daemon=True)
+    cleanup_thread.start()
+    print("[系统] 调试摄像头清理线程已启动")
 
     app.run(host='0.0.0.0', port=5000, debug=True)
