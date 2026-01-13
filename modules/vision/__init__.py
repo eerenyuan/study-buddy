@@ -80,17 +80,28 @@ class Camera(BaseModule):
 
         try:
             import cv2
+            import time
 
-            # 清空缓冲区：读取并丢弃2帧以获取最新画面
-            # 如果初始化时成功设置了 CAP_PROP_BUFFERSIZE=1，2帧足够
-            # 否则，这是最安全的折中方案
-            for _ in range(2):
-                self.cap.read()
+            # 重试机制：最多尝试3次
+            max_retries = 3
+            for attempt in range(max_retries):
+                # 清空缓冲区：读取并丢弃2帧以获取最新画面
+                for _ in range(2):
+                    self.cap.read()
 
-            # 读取最新的帧
-            ret, frame = self.cap.read()
-            if not ret:
-                raise Exception("无法从摄像头读取图像")
+                # 读取最新的帧
+                ret, frame = self.cap.read()
+                if ret:
+                    # 成功读取，退出重试循环
+                    break
+
+                # 读取失败，如果是最后一次尝试，抛出异常
+                if attempt == max_retries - 1:
+                    raise Exception(f"无法从摄像头读取图像（已重试{max_retries}次）")
+
+                # 等待一小段时间后重试
+                self.logger.log("camera", "warning", f"第{attempt + 1}次读取失败，等待0.5秒后重试...")
+                time.sleep(0.5)
 
             # 如果未指定输出路径，使用临时文件
             if not output_path:
