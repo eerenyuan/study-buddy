@@ -656,7 +656,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>学习监工管理系统</title>
+    <title>StudyBuddy学习伙伴</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -812,7 +812,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎓 学习监工管理系统 <a href="/debug" style="font-size: 16px; margin-left: 20px; color: white; text-decoration: none; opacity: 0.8;">🎥 摄像头调试</a></h1>
+            <h1>🎓 StudyBuddy学习伙伴 <a href="/debug" style="font-size: 16px; margin-left: 20px; color: white; text-decoration: none; opacity: 0.8;">🎥 摄像头调试</a></h1>
             <div class="status-bar">
                 <div class="status-item" id="status-display">
                     状态: <span id="status-text">未启动</span>
