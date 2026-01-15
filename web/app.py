@@ -45,6 +45,11 @@ def init_services():
     if monitor_service is not None:
         return monitor_service
 
+    # 创建必要的目录结构
+    (PROJECT_ROOT / "data" / "captures").mkdir(parents=True, exist_ok=True)
+    (PROJECT_ROOT / "logs").mkdir(parents=True, exist_ok=True)
+    (PROJECT_ROOT / "config").mkdir(parents=True, exist_ok=True)
+
     # 1. AI 服务
     ai_config = AIConfig(
         api_key=os.getenv("KIMI_API_KEY"),
