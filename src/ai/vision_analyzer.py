@@ -29,7 +29,7 @@ class VisionAnalyzer:
 
     def __init__(self, api_key: str, base_url: str, model: str,
                  timeout: int = 30, max_retries: int = 3,
-                 log_dir: str = "logs"):
+                 log_dir: str = "logs", project_root: Optional[Path] = None):
         """
         Args:
             api_key: Kimi API Key
@@ -38,6 +38,7 @@ class VisionAnalyzer:
             timeout: 请求超时（秒）
             max_retries: 最大重试次数
             log_dir: 日志目录
+            project_root: 项目根目录（用于解析相对路径）
         """
         self.api_key = api_key
         self.base_url = base_url
@@ -45,6 +46,7 @@ class VisionAnalyzer:
         self.timeout = timeout
         self.max_retries = max_retries
         self.logger = Logger(log_dir)
+        self.project_root = project_root or Path(__file__).parent.parent.parent
 
     def analyze(self, image_path: str) -> Dict[str, Any]:
         """分析图片
@@ -95,11 +97,16 @@ class VisionAnalyzer:
             base64 编码的字符串，失败返回 None
         """
         try:
-            if not Path(image_path).exists():
-                self.logger.log("ai", "error", f"图片不存在: {image_path}")
+            # 将相对路径转换为绝对路径
+            path = Path(image_path)
+            if not path.is_absolute():
+                path = self.project_root / image_path
+
+            if not path.exists():
+                self.logger.log("ai", "error", f"图片不存在: {image_path} (尝试: {path})")
                 return None
 
-            with open(image_path, "rb") as f:
+            with open(path, "rb") as f:
                 image_data = f.read()
                 image_base64 = base64.b64encode(image_data).decode("utf-8")
 
