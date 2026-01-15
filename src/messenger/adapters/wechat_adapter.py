@@ -33,18 +33,21 @@ class WeChatAdapter(MessageAdapter):
                  corpid: str,
                  corpsecret: str,
                  agentid: str,
-                 log_dir: str = "logs"):
+                 log_dir: str = "logs",
+                 project_root: Optional[Path] = None):
         """
         Args:
             corpid: 企业 ID
             corpsecret: 应用 Secret
             agentid: 应用 ID
             log_dir: 日志目录
+            project_root: 项目根目录（用于解析相对路径）
         """
         super().__init__("wechat", log_dir)
         self.corpid = corpid
         self.corpsecret = corpsecret
         self.agentid = agentid
+        self.project_root = project_root or Path(__file__).parent.parent.parent.parent
 
         # Token 缓存
         self.access_token: Optional[str] = None
@@ -164,14 +167,21 @@ class WeChatAdapter(MessageAdapter):
     def send_image(self, image_path: str, recipient_id: str) -> bool:
         """发送图片消息"""
         print(f"[DEBUG send_image] image_path: {image_path}")
-        print(f"[DEBUG send_image] exists: {Path(image_path).exists()}")
 
-        if not Path(image_path).exists():
-            self.logger.log("messenger", "error", f"图片文件不存在: {image_path}")
+        # 将相对路径转换为绝对路径
+        path = Path(image_path)
+        if not path.is_absolute():
+            path = self.project_root / image_path
+
+        print(f"[DEBUG send_image] resolved path: {path}")
+        print(f"[DEBUG send_image] exists: {path.exists()}")
+
+        if not path.exists():
+            self.logger.log("messenger", "error", f"图片文件不存在: {image_path} (尝试: {path})")
             return False
 
         # 检查文件大小（不超过2MB）
-        file_size = os.path.getsize(image_path)
+        file_size = os.path.getsize(path)
         print(f"[DEBUG send_image] file_size: {file_size} bytes")
         if file_size > 2 * 1024 * 1024:
             self.logger.log("messenger", "error", f"图片大小超过2MB限制: {file_size / 1024 / 1024:.2f}MB")
@@ -182,9 +192,9 @@ class WeChatAdapter(MessageAdapter):
             access_token = self._get_access_token()
             upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token={access_token}&type=image&debug=1"
 
-            print(f"[DEBUG send_image] 开始上传图片: {image_path}")
-            with open(image_path, "rb") as f:
-                files = {"media": (Path(image_path).name, f, "image/jpeg")}
+            print(f"[DEBUG send_image] 开始上传图片: {path}")
+            with open(str(path), "rb") as f:
+                files = {"media": (path.name, f, "image/jpeg")}
                 response = httpx.post(upload_url, files=files, timeout=30)
 
             upload_result = response.json()

@@ -55,6 +55,9 @@ class MessengerConfig:
     # 日志配置
     log_dir: str = "logs"
 
+    # 项目根目录（用于解析相对路径）
+    project_root: Optional[Path] = None
+
 
 class MessengerService:
     """Messenger 服务类
@@ -309,7 +312,8 @@ def create_messenger_service(config: MessengerConfig) -> MessengerService:
             corpid=config.wechat_corpid,
             corpsecret=config.wechat_secret,
             agentid=config.wechat_agentid,
-            log_dir=config.log_dir
+            log_dir=config.log_dir,
+            project_root=config.project_root
         )
         if wechat.initialize():
             adapters.append(wechat)

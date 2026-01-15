@@ -75,7 +75,8 @@ def init_services():
         wechat_agentid=os.getenv("WECHAT_AGENTID", ""),
         wechat_recipient=os.getenv("WECHAT_TOUSER", ""),
         telegram_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
-        telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "")
+        telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+        project_root=PROJECT_ROOT
     )
     messenger_service = create_messenger_service(messenger_config)
 
@@ -377,7 +378,8 @@ def save_recipients():
                 wechat_agentid=os.getenv("WECHAT_AGENTID", ""),
                 wechat_recipient=recipients,
                 telegram_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
-                telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "")
+                telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+                project_root=PROJECT_ROOT
             )
             new_messenger = create_messenger_service(messenger_config)
             monitor_service.messenger = new_messenger
