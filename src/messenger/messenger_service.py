@@ -23,6 +23,7 @@ Messenger 服务类
 """
 from dataclasses import dataclass, field
 from typing import List, Optional, Callable, Dict, Any
+from pathlib import Path
 
 from src.common import Logger
 from .adapters import MessageAdapter, WeChatAdapter, TelegramAdapter
