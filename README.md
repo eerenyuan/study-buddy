@@ -1,6 +1,6 @@
-# StudyBuddy 学习伙伴
+# Study Buddy - AI 学习伙伴
 
-基于 AI 视觉的智能学习陪伴系统，通过摄像头实时分析孩子的学习状态，并通过 Web 界面提供友好的规则配置和监控管理。
+基于 AI 视觉的智能学习陪伴系统，通过摄像头实时分析学习状态，并通过 Web 界面提供友好的规则配置和监控管理。
 
 ## ✨ 主要功能
 
@@ -17,247 +17,183 @@
 
 ```
 study-buddy/
-├── core/                   # 核心模块
-│   ├── __init__.py
-│   ├── base.py            # 基础类定义
-│   ├── config.py          # 环境变量管理（API keys）
-│   └── scheduler.py       # 调度中心
-├── modules/               # 功能模块
-│   ├── vision/            # 视觉模块
-│   │   └── __init__.py    # Camera + KimiVisionAnalyzer
-│   └── im/                # 通知模块
-│       └── __init__.py    # WeChatNotifier + IMManager
-├── data/                  # 运行时数据
+├── src/                    # 核心业务逻辑
+│   ├── ai/                # AI 分析模块
+│   ├── messenger/         # 消息通知模块
+│   ├── monitor/           # 监控服务模块
+│   ├── storage/           # 存储模块
+│   ├── vision/            # 摄像头模块
+│   └── common.py          # 通用工具类
+├── web/                   # Web 界面
+│   ├── app.py             # Flask 应用
+│   ├── static/            # CSS, JS
+│   └── templates/         # HTML 模板
+├── config/                # 配置文件
+│   └── monitor_config.json
+├── data/                  # 运行时数据（会被 Git 忽略）
 │   ├── captures/          # 捕获的图片
-│   └── monitor_config.json # Web 保存的规则配置
-├── logs/                  # 日志目录
-├── main.py                # 命令行入口
-├── web_server.py          # Web 管理界面
+│   └── detection_records.db
+├── logs/                  # 日志文件（会被 Git 忽略）
+├── .env                   # 环境变量（需要创建，见 .env.example）
 ├── requirements.txt       # Python 依赖
-├── .env.example           # 配置文件示例
-└── .gitignore             # Git 忽略规则
+└── README.md
 ```
 
 ## 🚀 快速开始
 
-### 1. 安装依赖
+### 1. 克隆项目
 
 ```bash
+git clone https://github.com/eerenyuan/study-buddy.git
 cd study-buddy
+```
+
+### 2. 安装依赖
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. 配置环境变量
+### 3. 配置环境变量
 
-复制配置文件并编辑：
+复制 `.env.example` 为 `.env` 并填入配置：
 
 ```bash
 cp .env.example .env
 ```
 
-编辑 `.env` 文件，填入必要的配置信息：
+编辑 `.env` 文件，填入必要的配置：
 
 ```env
-# Kimi Vision API（必需）
+# Kimi Vision API 配置
 KIMI_API_KEY=your_kimi_api_key_here
-KIMI_BASE_URL=https://api.moonshot.cn/v1
-KIMI_MODEL=moonshot-v1-8k-vision-preview
-KIMI_TIMEOUT=120
 
-# 企业微信配置（可选，不配置则不发送通知）
+# 企业微信配置
 WECHAT_CORPID=your_corp_id
 WECHAT_AGENTID=your_agent_id
 WECHAT_SECRET=your_app_secret
-WECHAT_TOUSER=user1|user2    # 多个用户用 | 分隔
-
-# 摄像头配置
-CAMERA_INDEX=0              # 摄像头索引，默认0
-RESOLUTION=1920,1080        # 分辨率
-IMAGE_QUALITY=85            # 图片质量
+WECHAT_TOUSER=RenYuan|xiaoyu
 ```
 
-### 3. 启动 Web 管理界面（推荐使用）
+### 4. 启动应用
 
 ```bash
-python web_server.py
+cd web
+python app.py
 ```
 
-访问：**http://localhost:5000**
+访问 http://localhost:5000
 
-## 💡 使用指南
+## ⚠️ 重要说明
 
-### Web 界面功能
+### 数据文件夹
 
-访问 **http://localhost:5000** 后，你可以：
+以下文件夹会在首次运行时自动创建：
+- `data/` - 数据目录
+- `data/captures/` - 截图保存目录
+- `logs/` - 日志目录
+- `config/` - 配置目录（包含 `monitor_config.json`）
 
-#### 1️⃣ 监控控制页面
+### 从其他电脑迁移项目
 
-- **启动监控**: 开始自动截图和AI分析
-- **停止监控**: 停止监控任务
-- **查看历史**: 浏览所有历史截图，不合格的会显示红色背景
-- **实时状态**: 查看当前监控状态、运行时间、截图次数等
+如果你从另一台电脑复制了这个项目：
 
-#### 2️⃣ 规则配置
-
-在"提醒规则配置"卡片中，使用正则表达式定义孩子应该达到的学习状态：
-
-```
-在书桌前: ^是$              # 必须在书桌前
-正在玩耍: ^否$              # 不能玩耍
-当前活动: ^(看书|写字)$      # 只能看书或写字
-坐姿状态: ^端正$            # 坐姿必须端正
-台灯状态: ^是$              # 必须开台灯
-照明情况: ^(充足|一般)$     # 不能昏暗
+**方法1：保留数据库和图片**
+```bash
+# 复制整个项目文件夹时，确保包含：
+# - data/captures/ (图片文件)
+# - data/detection_records.db (数据库)
+# 否则记录页面会显示"图片不可用"
 ```
 
-**规则说明**：
-- 格式：`字段名: 正则表达式`
-- 如果AI返回的内容匹配正则表达式，则认为该项合格
-- 只要有一项不合格，就会立即发送通知（包含图片）
-- 所有字段都合格时，不会发送通知（除非超过了通知间隔）
+**方法2：清空数据重新开始**
+```bash
+# 删除数据文件夹，让应用重新创建
+rm -rf data/
+# 然后启动应用，会自动创建新的数据库
+```
 
-#### 3️⃣ 时间间隔配置
+### 数据不会被提交到 Git
 
-- **截图间隔**: 多久截图一次（默认30秒）
-- **通知间隔**: 即使状态合格，也会定期发送状态更新（默认5分钟）
-- **停止间隔**: 连续不合格多久后自动停止监控（默认1小时）
+以下文件/文件夹被 `.gitignore` 忽略（不会上传到 GitHub）：
+- `.env` - 包含 API 密钥等敏感信息
+- `data/captures/` - 图片文件太大且不断增长
+- `data/*.db` - 数据库文件包含本地数据
+- `logs/` - 日志文件
 
-#### 4️⃣ 定时任务（NEW！）
+## 📝 使用说明
 
-在"定时任务配置"卡片中：
+### 配置监控规则
 
-- **启用定时任务**: 勾选后启用
-- **开始时间**: 每天自动启动监控的时间（如 08:00）
-- **结束时间**: 每天自动停止监控的时间（如 18:00）
+1. 访问 http://localhost:5000/config
+2. 添加规则（字段名 + 正则表达式）
+3. 配置通知间隔和时间调度
+4. 保存配置
 
-**使用场景**：
-家长可以在早上出门前设置好时间，系统会自动在指定时间启动和停止监控，无需手动操作。
+### 测试消息通知
 
-**注意事项**：
-- 定时任务每天只执行一次
-- 到达开始时间后会自动启动监控
-- 到达结束时间后会自动停止监控
-- 手动启动/停止不会影响定时任务
+1. 访问 http://localhost:5000/messenger_test
+2. 添加企业微信 userid
+3. 点击"测试"按钮验证
+4. 保存收件人列表
 
-#### 5️⃣ 摄像头调试
+### 查看检测记录
 
-点击导航栏的"摄像头调试"可以：
-- 实时查看摄像头画面（MJPEG流）
-- 测试摄像头是否正常工作
-- 调整摄像头位置和角度
+1. 访问 http://localhost:5000/records
+2. 选择"今天的记录"或"最近的记录"
+3. 点击图片可查看大图
 
-访问：**http://localhost:5000/camera**
+## 🔧 开发说明
 
-#### 6️⃣ 保存配置
-
-- 所有配置修改后，点击页面底部的"💾 保存配置"按钮
-- 只有配置被修改时，保存按钮才会可用
-- 保存后配置立即生效
-
-### 命令行运行（可选）
-
-如果不使用 Web 界面，可以直接运行：
+### 项目启动入口
 
 ```bash
-python main.py
+# Web 界面
+cd web
+python app.py
+
+# 或者从根目录运行
+python -m web.app
 ```
 
-使用 `.env` 中的配置运行。
+### 主要模块说明
 
-## 🎯 核心功能
+- **SimpleMonitorService**: 核心监控服务
+- **SimpleRuleChecker**: 规则检查器（正则匹配）
+- **NotifyManager**: 通知管理器（间隔控制）
+- **VisionAnalyzer**: AI 视觉分析
+- **CameraSingleton**: 摄像头单例管理
 
-### AI 视觉分析
+### 配置文件
 
-Kimi Vision API 自动分析以下维度：
-- ✅ 在书桌前检测
-- ✅ 玩耍行为识别
-- ✅ 当前活动识别（看书/写字/用电脑/玩手机/发呆）
-- ✅ 坐姿状态检测（端正/不佳/趴着/歪坐）
-- ✅ 台灯状态检测
-- ✅ 照明情况分析
+- `config/monitor_config.json` - 监控配置（规则、时间调度等）
+- `.env` - 环境变量（API 密钥等）
 
-### 智能提醒机制
+## 🐛 常见问题
 
-系统会自动：
-1. **规则检查**: 对比AI分析结果与配置的规则
-2. **立即通知**: 发现不合格立即发送通知（包含截图）
-3. **定期汇报**: 即使合格，也会定期发送状态更新
-4. **自动停止**: 连续不合格太久自动停止监控
+### Q: 记录页面显示"图片不可用"
 
-### 多收件人通知
+**A**: 原因是数据库中的记录指向不存在的图片文件。
 
-支持同时向多个企业微信用户发送通知：
+**解决方案**：
+1. 如果是从其他电脑复制的项目，需要同时复制 `data/captures/` 文件夹
+2. 或者删除 `data/detection_records.db` 重新开始
 
-```env
-WECHAT_TOUSER=user1|user2|user3
+### Q: 启动报错 "ModuleNotFoundError: No module named 'src'"
+
+**A**: 确保从 `web/` 目录启动，或使用：
+```bash
+python -m web.app
 ```
 
-用 `|` 分隔多个用户名。
+### Q: 企业微信消息发送失败
 
-## 📝 配置文件说明
+**A**: 检查 `.env` 文件中的配置是否正确，特别是：
+- `WECHAT_CORPID`
+- `WECHAT_AGENTID`
+- `WECHAT_SECRET`
+- `WECHAT_TOUSER` (userid 格式)
 
-### `.env` - 环境变量（需手动配置）
+## 📄 许可证
 
-存放 **敏感信息**，不要提交到 Git：
-- Kimi API 密钥（必需）
-- 企业微信凭证（可选）
-- 摄像头索引
-
-### `data/monitor_config.json` - Web配置（自动生成）
-
-Web 页面保存的配置：
-- 提醒规则（正则表达式）
-- 时间间隔
-- 定时任务设置
-
-**此文件会被 .gitignore 忽略**
-
-## 🔧 技术栈
-
-- **Python 3.8+**
-- **OpenCV**: 摄像头捕获
-- **Kimi Vision API**: AI 图像分析
-- **Flask**: Web 管理界面
-- **企业微信 API**: 消息通知
-
-## 📋 常见问题
-
-### Q1: 摄像头无法打开？
-
-**A**: 检查以下几点：
-1. 摄像头是否被其他程序占用
-2. `.env` 中的 `CAMERA_INDEX` 是否正确（尝试 0, 1, 2...）
-3. 访问 `/camera` 页面测试摄像头是否正常
-
-### Q2: 收不到企业微信通知？
-
-**A**: 确认：
-1. `.env` 中的企业微信配置是否正确
-2. `WECHAT_TOUSER` 中的用户名是否正确
-3. 网络是否正常（可以访问企业微信API）
-
-### Q3: 定时任务没有自动启动？
-
-**A**:
-1. 确认"启用定时任务"已勾选并保存
-2. 检查当前时间是否在开始时间和结束时间之间
-3. 查看服务器控制台是否有"[调度器]"相关日志
-
-### Q4: AI 分析一直失败？
-
-**A**:
-1. 检查 `.env` 中的 `KIMI_API_KEY` 是否正确
-2. 确认网络可以访问 Kimi API
-3. 查看控制台日志了解具体错误信息
-
-## 🔒 隐私说明
-
-- 所有截图保存在 `data/captures/` 目录
-- 历史记录仅在本地保存，不会上传到云端
-- `.env` 文件包含敏感信息，**不要提交到 Git**
-- 企业微信通知包含图片，请确保收件人可信赖
-
-## 📞 支持
-
-如有问题或建议，请提交 Issue 或 Pull Request。
-
+MIT License
