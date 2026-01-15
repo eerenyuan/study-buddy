@@ -55,6 +55,9 @@ class CameraSingleton:
         # 模式切换配置
         self.switch_delay = 0.5  # 切换模式时的等待时间（秒）
 
+        # 项目根目录（用于构建绝对路径）
+        self.project_root = Path(__file__).parent.parent.parent
+
         self._initialized = True
         self.logger.log("camera", "info", "单例摄像头管理器创建")
 
@@ -149,14 +152,23 @@ class CameraSingleton:
             # 生成文件名（格式：月日年 时分秒，例如 01152026 153045）
             if output_path is None:
                 timestamp = datetime.now()
-                output_path = f"data/captures/{timestamp.strftime('%m%d%Y %H%M%S')}.jpg"
-                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                output_path = self.project_root / "data" / "captures" / f"{timestamp.strftime('%m%d%Y %H%M%S')}.jpg"
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                # 如果是相对路径，转换为绝对路径
+                output_path = Path(output_path)
+                if not output_path.is_absolute():
+                    output_path = self.project_root / output_path
+                output_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 保存图像（使用高质量）
-            cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            cv2.imwrite(str(output_path), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
 
             self.logger.log("camera", "info", f"捕获图像: {output_path}")
-            return output_path
+
+            # 返回相对于项目根目录的路径（用于数据库存储和 Web 访问）
+            relative_path = output_path.relative_to(self.project_root)
+            return str(relative_path)
 
         except Exception as e:
             self.logger.log("camera", "error", f"捕获图像失败: {e}")
