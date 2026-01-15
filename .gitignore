@@ -43,11 +43,14 @@ env/
 *~
 .DS_Store
 
-# 数据文件（包含捕获的图片）
-data/captures/
-data/*.jpg
-data/*.png
-data/*.json
+# 数据文件
+data/captures/       # 捕获的图片
+data/*.db           # 数据库文件
+data/*.json         # 数据目录下的 JSON（临时数据）
+
+# 配置文件（包含敏感信息）
+config/*.json       # 配置文件
+!config/*.example   # 但保留示例配置
 
 # 临时文件
 *.tmp
@@ -55,8 +58,15 @@ data/*.json
 *.bak
 *.cache
 
-# 配置文件（包含敏感信息）
-data/monitor_config.json
-
 # 测试输出
 test_output/
+
+# 旧目录（以防万一）
+refactored/
+web_v2/
+core/
+modules/
+examples/
+
+# nul 文件（Windows 空设备文件误创建）
+nul

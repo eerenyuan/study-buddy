@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detection Records - Study Buddy System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 检测记录</h1>
+            <nav>
+                <a href="/">状态</a>
+                <a href="/config">配置</a>
+                <a href="/records" class="active">记录</a>
+                <a href="/messenger_test">消息测试</a>
+            </nav>
+        </header>
+
+        <main>
+            <div class="record-actions">
+                <button class="btn btn-primary" onclick="loadTodayRecords()">
+                    📅 今天的记录
+                </button>
+                <button class="btn btn-secondary" onclick="loadRecentRecords()">
+                    🕐 最近的记录
+                </button>
+                <button class="btn btn-secondary" onclick="location.href='/'">
+                    ← 返回
+                </button>
+            </div>
+
+            <div id="records-container">
+                <p class="text-muted">请选择要查看的记录类型</p>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/records.js') }}"></script>
+</body>
+</html>

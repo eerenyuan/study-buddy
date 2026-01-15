@@ -1,0 +1,34 @@
+{
+  "rules": [
+    {
+      "key": "at_desk",
+      "regexp": "^true$"
+    },
+    {
+      "key": "is_study",
+      "regexp": "^true$"
+    },
+    {
+      "key": "activity",
+      "regexp": "^(看书)$"
+    },
+    {
+      "key": "posture",
+      "regexp": "^(端正)$"
+    },
+    {
+      "key": "lighting",
+      "regexp": "^(充足)$"
+    }
+  ],
+  "min_notify_interval": 10,
+  "max_notify_interval": 30,
+  "consecutive_fail_limit": 12,
+  "auto_start_time": "18:25",
+  "auto_stop_time": "20:50",
+  "enable_time_scheduler": true,
+  "capture_interval": 300,
+  "preview_duration": 20,
+  "enable_preview": true,
+  "log_dir": "logs"
+}

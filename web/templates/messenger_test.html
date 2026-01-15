@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messenger Test - Study Buddy System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .recipient-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .recipient-item input {
+            flex: 1;
+        }
+
+        .recipient-item .test-btn {
+            min-width: 80px;
+        }
+
+        .test-result {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .test-result.success {
+            background: #d4edda;
+            color: #155724;
+            display: inline-block;
+        }
+
+        .test-result.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: inline-block;
+        }
+
+        .test-result.testing {
+            background: #fff3cd;
+            color: #856404;
+            display: inline-block;
+        }
+
+        .current-config {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📨 Messenger Test</h1>
+            <nav>
+                <a href="/">状态</a>
+                <a href="/config">配置</a>
+                <a href="/records">记录</a>
+                <a href="/messenger_test" class="active">消息测试</a>
+            </nav>
+        </header>
+
+        <main>
+            <div class="config-section">
+                <h2>📬 收件人列表</h2>
+                <p class="text-muted">当前配置的收件人（保存在 .env 文件的 WECHAT_TOUSER 字段）</p>
+
+                <div id="recipients-container">
+                    <!-- 收件人列表将动态生成 -->
+                    <p class="text-muted">加载中...</p>
+                </div>
+
+                <div class="actions">
+                    <button type="button" class="btn btn-secondary" onclick="addNewRecipient()">
+                        ➕ 添加收件人
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="saveRecipients()">
+                        💾 保存修改
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="location.reload()">
+                        🔄 重置
+                    </button>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h2>ℹ️ 使用说明</h2>
+                <ul>
+                    <li>每个收件人可以单独点击"测试"按钮发送测试消息</li>
+                    <li>测试消息包含文字和图片</li>
+                    <li>可以添加新收件人或删除现有收件人</li>
+                    <li>点击"保存修改"将更改保存到 .env 文件</li>
+                    <li>多个收件人会用 | 分隔保存</li>
+                    <li><strong>获取userid的方法：</strong>
+                        <ul>
+                            <li>在企业微信管理后台查看通讯录</li>
+                            <li>或调用企业微信API获取成员列表</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 从后端传递当前收件人列表到 JavaScript
+        window.currentRecipients = '{{ current_recipients }}';
+    </script>
+    <script src="{{ url_for('static', filename='js/messenger_test.js') }}"></script>
+</body>
+</html>

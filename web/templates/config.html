@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - Study Buddy System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ 配置管理</h1>
+            <nav>
+                <a href="/">状态</a>
+                <a href="/config" class="active">配置</a>
+                <a href="/records">记录</a>
+                <a href="/messenger_test">消息测试</a>
+            </nav>
+        </header>
+
+        <main>
+            <form id="config-form">
+                <!-- 规则配置 -->
+                <section class="config-section">
+                    <h2>📋 规则配置</h2>
+                    <div id="rules-container">
+                        {% for rule in rules %}
+                        <div class="rule-item">
+                            <input type="text"
+                                   name="rule_key_{{ loop.index0 }}"
+                                   value="{{ rule.key }}"
+                                   placeholder="字段名"
+                                   class="input-field">
+                            <input type="text"
+                                   name="rule_regexp_{{ loop.index0 }}"
+                                   value="{{ rule.regexp }}"
+                                   placeholder="正则表达式"
+                                   class="input-field regexp-field">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeRule(this)">
+                                ✕
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="addRule()">
+                        ➕ 添加规则
+                    </button>
+                </section>
+
+                <!-- 通知配置 -->
+                <section class="config-section">
+                    <h2>🔔 通知配置</h2>
+                    <div class="form-group">
+                        <label>最小通知间隔（分钟）</label>
+                        <input type="number" name="min_notify_interval" value="{{ min_notify_interval }}"
+                               class="input-field" min="1" max="120">
+                        <small>如果距离上次通知时间太短，不通知（即使不合格）</small>
+                    </div>
+                    <div class="form-group">
+                        <label>最大通知间隔（分钟）</label>
+                        <input type="number" name="max_notify_interval" value="{{ max_notify_interval }}"
+                               class="input-field" min="1" max="720">
+                        <small>如果距离上次通知时间太久，强制通知（即使合格）</small>
+                    </div>
+                    <div class="form-group">
+                        <label>连续失败限制</label>
+                        <input type="number" name="consecutive_fail_limit" value="{{ consecutive_fail_limit }}"
+                               class="input-field" min="1" max="20">
+                        <small>连续失败达到此次数后，自动停止服务</small>
+                    </div>
+                </section>
+
+                <!-- 监控配置 -->
+                <section class="config-section">
+                    <h2>📹 监控配置</h2>
+                    <div class="form-group">
+                        <label>截图间隔（秒）</label>
+                        <input type="number" name="capture_interval" value="{{ capture_interval }}"
+                               class="input-field" min="5" max="600">
+                    </div>
+                    <div class="form-group">
+                        <label>预览时长（秒）</label>
+                        <input type="number" name="preview_duration" value="{{ preview_duration }}"
+                               class="input-field" min="0" max="60">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="enable_preview" {{ 'checked' if enable_preview else '' }}>
+                            启用预览（监控开始前先预览）
+                        </label>
+                    </div>
+                </section>
+
+                <!-- 时间调度 -->
+                <section class="config-section">
+                    <h2>⏰ 时间调度</h2>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="enable_time_scheduler" {{ 'checked' if enable_time_scheduler else '' }}>
+                            启用自动启停
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>自动开始时间</label>
+                        <input type="time" name="auto_start_time" value="{{ auto_start_time }}"
+                               class="input-field">
+                    </div>
+                    <div class="form-group">
+                        <label>自动停止时间</label>
+                        <input type="time" name="auto_stop_time" value="{{ auto_stop_time }}"
+                               class="input-field">
+                    </div>
+                </section>
+
+                <!-- 操作按钮 -->
+                <div class="actions">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        💾 保存配置
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="location.href='/'">
+                        ← 返回
+                    </button>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/config.js') }}"></script>
+</body>
+</html>

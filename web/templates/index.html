@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Buddy System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 Study Buddy</h1>
+            <nav>
+                <a href="/" class="active">状态</a>
+                <a href="/config">配置</a>
+                <a href="/records">记录</a>
+                <a href="/messenger_test">消息测试</a>
+            </nav>
+        </header>
+
+        <main>
+            <div class="status-card">
+                <h2>系统状态</h2>
+
+                <div class="status-item">
+                    <span class="label">监控状态:</span>
+                    <span class="value" id="monitoring-status">
+                        <span class="badge badge-{{ 'success' if is_monitoring else 'secondary' }}">
+                            {{ '运行中' if is_monitoring else '已停止' }}
+                        </span>
+                    </span>
+                </div>
+
+                <div class="status-item">
+                    <span class="label">连续失败:</span>
+                    <span class="value">
+                        <span id="consecutive-failures">{{ consecutive_failures }}</span> /
+                        <span id="fail-limit">{{ consecutive_fail_limit }}</span>
+                    </span>
+                </div>
+
+                <div class="actions">
+                    <button id="btn-start" class="btn btn-success" {{ 'disabled' if is_monitoring else '' }}>
+                        ▶ 启动监控
+                    </button>
+                    <button id="btn-stop" class="btn btn-danger" {{ 'disabled' if not is_monitoring else '' }}>
+                        ⏹ 停止监控
+                    </button>
+                    <button id="btn-refresh" class="btn btn-primary">
+                        🔄 刷新状态
+                    </button>
+                </div>
+            </div>
+
+            <!-- 预览视频区域 -->
+            <div class="preview-card" id="preview-container" style="display: none;">
+                <h2>摄像头预览 <span class="preview-countdown" id="preview-countdown"></span></h2>
+                <div class="video-wrapper">
+                    <img id="video-feed" src="" alt="摄像头预览">
+                    <div id="video-error" class="video-error" style="display: none;">
+                        <p>预览已结束</p>
+                        <p class="text-muted">监控程序正在运行中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h2>功能说明</h2>
+                <ul>
+                    <li><strong>监控功能</strong>: 定时截图，AI 分析学习状态</li>
+                    <li><strong>智能通知</strong>: 连续失败达到阈值时发送提醒</li>
+                    <li><strong>时间调度</strong>: 支持每日自动启停</li>
+                    <li><strong>灵活配置</strong>: 可自定义规则和参数</li>
+                </ul>
+            </div>
+        </main>
+
+        <footer>
+            <p>Study Buddy v2.0 | 基于规则检查和智能通知</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
