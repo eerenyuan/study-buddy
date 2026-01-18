@@ -553,7 +553,10 @@ def serve_image():
 
     # 安全检查：确保路径在允许的目录内
     # 只允许访问 data/captures 目录下的图片
-    if '..' in image_path or not image_path.startswith('data/captures/'):
+    # 标准化路径分隔符（处理 Windows 反斜杠）
+    normalized_path = image_path.replace('\\', '/')
+
+    if '..' in normalized_path or not normalized_path.startswith('data/captures/'):
         return "Invalid path", 403
 
     # 使用项目根目录构建完整路径
