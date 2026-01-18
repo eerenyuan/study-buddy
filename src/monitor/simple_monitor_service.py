@@ -300,7 +300,11 @@ class SimpleMonitorService:
         return True
 
     def stop_monitor(self) -> bool:
-        """停止监控循环"""
+        """停止监控循环
+
+        注意：这个方法可能从监控线程内部调用（通过 process_snapshot），
+        也可能从外部调用（通过 API 或时间调度器）。
+        """
         if not self._monitoring:
             self.logger.log("monitor", "warning", "监控循环未在运行")
             return False
@@ -310,10 +314,27 @@ class SimpleMonitorService:
         self.status.is_monitoring = False
         self.status.stop_time = datetime.now()
 
-        # 等待监控线程结束
-        if self._monitor_thread:
-            self._monitor_thread.join(timeout=5)
-            self._monitor_thread = None
+        # 检查是否在监控线程内部调用
+        current_thread = threading.current_thread()
+        is_called_from_monitor_thread = (
+            self._monitor_thread is not None and
+            current_thread == self._monitor_thread
+        )
+
+        if is_called_from_monitor_thread:
+            # 从监控线程内部调用：不能 join 自己，只设置标志
+            self.logger.log("monitor", "info", "从监控线程内部调用停止，不等待线程结束")
+        else:
+            # 从外部调用：等待监控线程结束
+            if self._monitor_thread:
+                self.logger.log("monitor", "info", "等待监控线程结束...")
+                self._monitor_thread.join(timeout=5)
+                self._monitor_thread = None
+
+        # 释放摄像头资源
+        if self.camera:
+            self.camera.shutdown()
+            self.logger.log("monitor", "info", "摄像头资源已释放")
 
         return True
 
@@ -352,7 +373,7 @@ class SimpleMonitorService:
                 image_path = self.camera.capture()
                 if not image_path:
                     self.logger.log("monitor", "error", "截图失败，跳过本次处理")
-                    time.sleep(self.config.capture_interval)
+                    self._sleep_with_interrupt(self.config.capture_interval)
                     continue
 
                 self.logger.log("monitor", "info", f"监控截图: {image_path}")
@@ -360,12 +381,22 @@ class SimpleMonitorService:
                 # 2. 处理截图
                 self.process_snapshot(image_path)
 
-                # 3. 等待下次截图
-                time.sleep(self.config.capture_interval)
+                # 3. 等待下次截图（可中断）
+                self._sleep_with_interrupt(self.config.capture_interval)
 
             except Exception as e:
                 self.logger.log("monitor", "error", f"监控循环异常: {e}")
-                time.sleep(5)
+                self._sleep_with_interrupt(5)
+
+    def _sleep_with_interrupt(self, duration: float):
+        """可中断的睡眠（用于快速响应停止信号）"""
+        end_time = time.time() + duration
+        while self._monitoring and time.time() < end_time:
+            # 每次最多睡 0.5 秒，然后检查 _monitoring 标志
+            remaining = end_time - time.time()
+            if remaining <= 0:
+                break
+            time.sleep(min(0.5, remaining))
 
     # ==================== 时间调度管理 ====================
 
