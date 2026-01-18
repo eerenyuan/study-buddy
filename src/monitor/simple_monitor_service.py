@@ -359,11 +359,15 @@ class SimpleMonitorService:
             return
 
         try:
-            time.sleep(duration)
+            # 使用可中断的睡眠
+            self._sleep_with_interrupt(duration)
         finally:
-            # 停止预览
-            self.camera.stop_preview("monitor")
-            self.logger.log("monitor", "info", "预览阶段结束，开始监控")
+            # 停止预览（如果监控已停止，不尝试操作摄像头）
+            if self._monitoring:
+                self.camera.stop_preview("monitor")
+                self.logger.log("monitor", "info", "预览阶段结束，开始监控")
+            else:
+                self.logger.log("monitor", "info", "预览阶段终止（监控已停止），跳过摄像头操作")
 
     def _run_monitor_loop(self):
         """运行监控循环"""
